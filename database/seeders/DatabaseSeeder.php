@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\User;
+use App\UserRole;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -19,21 +20,21 @@ class DatabaseSeeder extends Seeder
             'name' => 'Admin',
             'email' => 'admin@ru.ac.bd',
             'password' => bcrypt('admin123'),
-            'is_admin' => true,
+            'role' => UserRole::Admin,
         ]);
 
         User::factory()->create([
             'name' => 'opi',
             'email' => 'opi@ru.ac.bd',
             'password' => bcrypt('opi123'),
-            'is_admin' => false,
+            'role' => UserRole::User,
         ]);
 
         User::factory()->create([
             'name' => 'sami',
             'email' => 'sami@ru.ac.bd',
             'password' => bcrypt('sami123'),
-            'is_admin' => false,
+            'role' => UserRole::User,
         ]);
     }
 }
