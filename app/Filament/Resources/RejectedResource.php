@@ -25,10 +25,12 @@ class RejectedResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        //get task with waiting status
-        return parent::getEloquentQuery()
+        $user = auth()->user();
+        // Get tasks for the user with 'waiting' status, eager load relationships, ignore soft deletes
+        return Task::query()
+            ->forUser($user)
             ->withoutGlobalScopes([SoftDeletingScope::class])
-            ->where('status', '=', TaskStatus::rejected)
+            ->where('status', TaskStatus::rejected)
             ->with(['assignedUsers', 'creator', 'organization']);
     }
 

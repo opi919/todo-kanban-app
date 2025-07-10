@@ -159,7 +159,7 @@ class TaskResource extends Resource
             ->actions([
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make()
-                    ->visible(fn(Task $record) => $record->canBeEditedBy(auth()->user())),
+                    ->visible(fn(Task $record) => $record->canBeEditedBy(auth()->user()) && $user->isAdmin()),
                 Tables\Actions\DeleteAction::make()
                     ->visible(fn() => $user->isAdmin()),
             ])

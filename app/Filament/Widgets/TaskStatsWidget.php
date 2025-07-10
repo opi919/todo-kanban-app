@@ -19,6 +19,8 @@ class TaskStatsWidget extends BaseWidget
         $todoTasks = (clone $baseQuery)->where('status', TaskStatus::Pending)->count();
         $inProgressTasks = (clone $baseQuery)->where('status', TaskStatus::InProgress)->count();
         $completedTasks = (clone $baseQuery)->where('status', TaskStatus::Completed)->count();
+        $waitingTasks = (clone $baseQuery)->where('status', TaskStatus::waiting)->count();
+        $rejectedTasks = (clone $baseQuery)->where('status', TaskStatus::rejected)->count();
 
         $stats = [
             Stat::make('Total Tasks', $totalTasks)
@@ -40,6 +42,15 @@ class TaskStatsWidget extends BaseWidget
                 ->description('Finished tasks')
                 ->descriptionIcon('heroicon-m-check-circle')
                 ->color('success'),
+
+            Stat::make('Waiting', $waitingTasks)
+                ->description('Tasks waiting for approval')
+                ->descriptionIcon('heroicon-m-pause')
+                ->color('warning'),
+            Stat::make('Rejected', $rejectedTasks)
+                ->description('Tasks that were rejected')
+                ->descriptionIcon('heroicon-m-x-circle')
+                ->color('danger'),
         ];
 
         // Add admin-specific stats
