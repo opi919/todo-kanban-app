@@ -184,7 +184,10 @@ class TaskResource extends Resource
     public static function getNavigationBadge(): ?string
     {
         $user = auth()->user();
-        $count = Task::query()->forUser($user)->count();
+        $count = Task::query()->forUser($user)
+            ->where('status', '!=', TaskStatus::rejected)
+            ->where('status', '!=', TaskStatus::waiting)
+            ->count();
         return $count > 0 ? (string) $count : null;
     }
 
