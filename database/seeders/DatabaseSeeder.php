@@ -116,6 +116,7 @@ class DatabaseSeeder extends Seeder
                 'organization_id' => $organization->id,
                 'admin_id' => $admin->id,
                 'permissions' => [
+                    'assign_tasks' => true,
                     'view_assigned_tasks' => true,
                     'update_task_status' => true,
                     'comment_on_tasks' => true,

@@ -67,6 +67,10 @@ class User extends Authenticatable
     }
 
     // Helper methods
+    public function hasPermission(string $permission): bool
+    {
+        return isset($this->permissions[$permission]) && $this->permissions[$permission];
+    }
     public function isAdmin(): bool
     {
         return $this->role === UserRole::Admin;
@@ -133,7 +137,8 @@ class User extends Authenticatable
                 ->where('admin_id', $this->id);
         }
 
-        return User::where('id', 0); // Regular users cannot assign tasks
+        return User::regularUsers()
+            ->where('organization_id', $this->organization_id); // Regular users can assign task to myself only
     }
 
     public function getAssignedTasksCountAttribute(): int

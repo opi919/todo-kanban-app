@@ -23,6 +23,14 @@ class TasksKanbanBoard extends KanbanBoard
     protected static string $model = Task::class;
     protected static string $statusEnum = TaskStatus::class;
 
+    public static function getStatuses(): array
+    {
+        return collect(TaskStatus::cases())
+            ->reject(fn($status) => $status === TaskStatus::waiting)
+            ->map(fn($status) => $status->value)
+            ->toArray();
+    }
+
     protected function getEloquentQuery(): Builder
     {
         return Task::query()->forUser(auth()->user())->with(['assignedUsers', 'creator', 'organization']);
@@ -70,18 +78,18 @@ class TasksKanbanBoard extends KanbanBoard
         $data['status'] = TaskStatus::Pending->value;
         $data['created_by'] = auth()->id();
         $data['organization_id'] = auth()->user()->organization_id;
-        
+
         // Extract assigned users before creating task
         $assignedUsers = $data['assignedUsers'] ?? [];
         unset($data['assignedUsers']);
-        
+
         $task = Task::create($data);
-        
+
         // Attach assigned users
         if (!empty($assignedUsers)) {
             $task->assignedUsers()->sync($assignedUsers);
         }
-        
+
         Notification::make()
             ->title('Task Created')
             ->body("Task '{$task->title}' has been created successfully.")
@@ -199,7 +207,7 @@ class TasksKanbanBoard extends KanbanBoard
     public function onStatusChanged(string|int $recordId, string $status, array $fromOrderedIds, array $toOrderedIds): void
     {
         $task = Task::find($recordId);
-        
+
         // Check if user can modify this task
         if (!$task->canBeEditedBy(auth()->user())) {
             Notification::make()
@@ -223,7 +231,7 @@ class TasksKanbanBoard extends KanbanBoard
     public function onSortChanged(string|int $recordId, string $status, array $orderedIds): void
     {
         $task = Task::find($recordId);
-        
+
         // Check if user can modify this task
         if (!$task->canBeEditedBy(auth()->user())) {
             Notification::make()
@@ -240,7 +248,7 @@ class TasksKanbanBoard extends KanbanBoard
     protected function editRecord($recordId, array $data, array $state): void
     {
         $task = Task::find($recordId);
-        
+
         // Check if user can edit this task
         if (!$task->canBeEditedBy(auth()->user())) {
             Notification::make()
@@ -263,7 +271,7 @@ class TasksKanbanBoard extends KanbanBoard
         } else {
             // Admins can update all fields
             $task->update($data);
-            
+
             // Update assigned users if provided
             if ($assignedUsers !== null) {
                 $task->assignedUsers()->sync($assignedUsers);
@@ -309,7 +317,7 @@ class TasksKanbanBoard extends KanbanBoard
         }
 
         if ($record->priority && $record->priority !== 'medium') {
-            $priorityIcon = match($record->priority) {
+            $priorityIcon = match ($record->priority) {
                 'urgent' => '🔴',
                 'high' => '🟡',
                 'low' => '🟢',
@@ -340,12 +348,12 @@ class TasksKanbanBoard extends KanbanBoard
     protected function getCardExtraAttributes(?object $record): array
     {
         $classes = [];
-        
+
         // Add special styling for overdue tasks
         if ($record->due_date && $record->due_date->isPast() && $record->status !== TaskStatus::Completed) {
             $classes[] = 'border-red-300 bg-red-50';
         }
-        
+
         // Add special styling for high priority tasks
         if ($record->priority === 'urgent') {
             $classes[] = 'ring-2 ring-red-200';

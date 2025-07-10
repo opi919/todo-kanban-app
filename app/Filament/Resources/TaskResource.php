@@ -39,10 +39,14 @@ class TaskResource extends Resource
                     ->rows(3),
 
                 Forms\Components\Select::make('status')
-                    ->options(TaskStatus::class)
-                    ->default(TaskStatus::Pending)
-                    ->required()
-                    ->disabled(fn() => !$user->isAdmin()),
+                    ->options(
+                        $user->isAdmin() ? collect(TaskStatus::cases())
+                            ->reject(fn($status) => $status === TaskStatus::waiting)
+                            ->mapWithKeys(fn($status) => [$status->value => $status->getLabel()])
+                            ->toArray() : TaskStatus::class
+                    )
+                    ->default($user->isAdmin() ? TaskStatus::Pending : TaskStatus::waiting)
+                    ->required(),
 
                 Forms\Components\Select::make('priority')
                     ->options([
@@ -52,8 +56,7 @@ class TaskResource extends Resource
                         'urgent' => 'Urgent',
                     ])
                     ->default('medium')
-                    ->required()
-                    ->disabled(fn() => !$user->isAdmin()),
+                    ->required(),
 
                 Forms\Components\Select::make('assignedUsers')
                     ->label('Assigned To')
@@ -63,11 +66,9 @@ class TaskResource extends Resource
                     })
                     ->multiple()
                     ->searchable()
-                    ->preload()
-                    ->visible(fn() => $user->isAdmin()),
+                    ->preload(),
 
-                Forms\Components\DatePicker::make('due_date')
-                    ->disabled(fn() => !$user->isAdmin()),
+                Forms\Components\DatePicker::make('due_date'),
 
                 Forms\Components\Hidden::make('created_by')
                     ->default($user->id),
@@ -170,7 +171,7 @@ class TaskResource extends Resource
 
     public static function canCreate(): bool
     {
-        return auth()->user()?->isAdmin() ?? false;
+        return auth()->user()?->hasPermission('assign_tasks') ?? false;
     }
 
     public static function getNavigationBadge(): ?string

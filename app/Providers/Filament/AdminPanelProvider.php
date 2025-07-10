@@ -61,7 +61,7 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->navigationGroups([
                 'System Management',
-                'Task Management', 
+                'Task Management',
                 'User Management',
             ]);
     }
