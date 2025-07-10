@@ -52,8 +52,11 @@
                                     {{ ucfirst($task->priority) }}
                                 </span>
                             </p>
-                            <p class="text-sm text-gray-600">Assigned To: <span
-                                    class="font-medium">{{ $task->assignedUser->name }}</span></p>
+                            <p class="text-sm text-gray-600">Assigned To: 
+                                @foreach ($task->assignedUsers as $user)
+                                    <span class="font-medium">{{ $user->name }}</span>
+                                    @if (!$loop->last), @endif
+                                @endforeach</p>
                             <p class="text-sm text-gray-600">Due: <span
                                     class="font-medium">{{ $task->due_date ?? 'N/A' }}</span></p>
                         </div>
