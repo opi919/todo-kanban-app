@@ -2,33 +2,38 @@
 
 namespace App\Filament\Resources;
 
-use App\TaskStatus;
-use App\Filament\Resources\TaskResource\Pages;
+use App\Filament\Resources\WaitingResource\Pages;
+use App\Filament\Resources\WaitingResource\RelationManagers;
 use App\Models\Task;
-use App\Models\User;
+use App\Models\Waiting;
+use App\TaskStatus;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\SoftDeletingScope;
 
-class TaskResource extends Resource
+class WaitingResource extends Resource
 {
     protected static ?string $model = Task::class;
-    protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
+    protected static ?string $modelLabel = 'Waiting Task';
+    protected static ?string $navigationIcon = 'heroicon-o-clock';
     protected static ?string $navigationGroup = 'Task Management';
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 3;
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->forUser(auth()->user())->with(['assignedUsers', 'creator', 'organization']);
+        //get task with waiting status
+        return parent::getEloquentQuery()
+            ->withoutGlobalScopes([SoftDeletingScope::class])
+            ->where('status', '=', TaskStatus::waiting)
+            ->with(['assignedUsers', 'creator', 'organization']);
     }
 
     public static function form(Form $form): Form
     {
-        $user = auth()->user();
-
         return $form
             ->schema([
                 Forms\Components\TextInput::make('title')
@@ -39,14 +44,12 @@ class TaskResource extends Resource
                     ->rows(3),
 
                 Forms\Components\Select::make('status')
-                    ->options(
-                        $user->isAdmin() ? collect(TaskStatus::cases())
-                            ->reject(fn($status) => $status === TaskStatus::waiting)
-                            ->mapWithKeys(fn($status) => [$status->value => $status->getLabel()])
-                            ->toArray() : TaskStatus::class
-                    )
-                    ->default($user->isAdmin() ? TaskStatus::Pending : TaskStatus::waiting)
-                    ->required(),
+                    ->options([
+                        TaskStatus::waiting->value => TaskStatus::waiting->getLabel(),
+                    ])
+                    ->default(TaskStatus::waiting)
+                    ->required()
+                    ->disabled(),
 
                 Forms\Components\Select::make('priority')
                     ->options([
@@ -59,22 +62,17 @@ class TaskResource extends Resource
                     ->required(),
 
                 Forms\Components\Select::make('assignedUsers')
-                    ->label('Assigned To')
                     ->relationship('assignedUsers', 'name')
-                    ->options(function () use ($user) {
-                        return $user->getAssignableUsersQuery()->pluck('name', 'id');
-                    })
                     ->multiple()
-                    ->searchable()
-                    ->preload(),
+                    ->preload()
+                    ->visible(auth()->user()->isAdmin()),
 
-                Forms\Components\DatePicker::make('due_date'),
+                Forms\Components\Select::make('organization_id')
+                    ->relationship('organization', 'name')
+                    ->visible(auth()->user()->isSuperAdmin()),
 
-                Forms\Components\Hidden::make('created_by')
-                    ->default($user->id),
-
-                Forms\Components\Hidden::make('organization_id')
-                    ->default($user->organization_id),
+                Forms\Components\DatePicker::make('due_date')
+                    ->required(),
             ]);
     }
 
@@ -94,8 +92,6 @@ class TaskResource extends Resource
                         'secondary' => TaskStatus::Pending,
                         'warning' => TaskStatus::InProgress,
                         'success' => TaskStatus::Completed,
-                        'danger' => TaskStatus::rejected,
-                        'blue' => TaskStatus::waiting,
                     ]),
 
                 Tables\Columns\BadgeColumn::make('priority')
@@ -157,11 +153,30 @@ class TaskResource extends Resource
                     ->visible($user->isSuperAdmin()),
             ])
             ->actions([
+                Tables\Actions\Action::make('approve')
+                    ->label('Approve')
+                    ->icon('heroicon-m-check-circle')
+                    ->color('success')
+                    ->visible(fn(Task $record) => $record->status === TaskStatus::waiting && $user->isAdmin())
+                    ->requiresConfirmation()
+                    ->action(function (Task $record) {
+                        $record->status = TaskStatus::Pending;
+                        $record->save();
+                    }),
+                Tables\Actions\Action::make('reject')
+                    ->label('Reject')
+                    ->icon('heroicon-m-x-circle')
+                    ->color('danger')
+                    ->visible(fn(Task $record) => $record->status === TaskStatus::waiting && $user->isAdmin())
+                    ->requiresConfirmation()
+                    ->action(function (Task $record) {
+                        $record->status = TaskStatus::rejected;
+                        $record->save();
+                    }),
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make()
                     ->visible(fn(Task $record) => $record->canBeEditedBy(auth()->user())),
-                Tables\Actions\DeleteAction::make()
-                    ->visible(fn() => $user->isAdmin()),
+                Tables\Actions\DeleteAction::make(),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
@@ -171,29 +186,25 @@ class TaskResource extends Resource
             ]);
     }
 
-    public static function canCreate(): bool
+    public static function getRelations(): array
     {
-        return auth()->user()?->hasPermission('assign_tasks') ?? false;
-    }
-
-    public static function getNavigationBadge(): ?string
-    {
-        $user = auth()->user();
-        $count = Task::query()->forUser($user)->count();
-        return $count > 0 ? (string) $count : null;
-    }
-
-    public static function getNavigationBadgeColor(): string|array|null
-    {
-        return auth()->user()->isAdmin() ? 'warning' : 'primary';
+        return [
+            //
+        ];
     }
 
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListTasks::route('/'),
-            'create' => Pages\CreateTask::route('/create'),
-            'edit' => Pages\EditTask::route('/{record}/edit'),
+            'index' => Pages\ListWaitings::route('/'),
+            'edit' => Pages\EditWaiting::route('/{record}/edit'),
         ];
+    }
+
+    public static function getNavigationBadge(): ?string
+    {
+        $user = auth()->user();
+        $count = Task::query()->forUser($user)->where('status', TaskStatus::waiting)->count();
+        return $count > 0 ? (string) $count : null;
     }
 }

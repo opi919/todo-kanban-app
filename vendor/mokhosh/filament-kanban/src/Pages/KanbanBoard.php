@@ -38,7 +38,7 @@ class KanbanBoard extends Page
     protected function statuses(): Collection
     {
         return collect(static::$statusEnum::cases())
-            ->reject(fn($status) => $status === TaskStatus::waiting)
+            ->reject(fn($status) => $status === TaskStatus::waiting || $status === TaskStatus::rejected)
             ->map(fn($status) => [
                 'id' => $status->value,
                 'title' => $status->name,

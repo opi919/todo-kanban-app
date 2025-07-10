@@ -39,7 +39,10 @@ class TasksKanbanBoard extends KanbanBoard
     public static function getNavigationBadge(): ?string
     {
         $user = auth()->user();
-        $count = Task::query()->forUser($user)->count();
+        $count = Task::query()->forUser($user)->where('status', TaskStatus::Pending->value)
+            ->orWhere('status', TaskStatus::InProgress->value)
+            ->orWhere('status', TaskStatus::Completed->value)
+            ->count();
         return $count > 0 ? (string) $count : null;
     }
 
