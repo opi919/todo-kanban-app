@@ -17,6 +17,6 @@ Livewire::setScriptRoute(function ($handle) {
 });
 
 Route::get('/htplnsrekgtslotsvypa', function () {
-    $data['tasks'] = Task::orderBy('status','desc')->get()->groupBy('status');
+    $data['tasks'] = Task::where('organization_id', 1)->orderBy('status', 'desc')->get()->groupBy('status');
     return view('show-tasks', $data);
 });
