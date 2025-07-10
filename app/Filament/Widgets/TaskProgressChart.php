@@ -32,13 +32,13 @@ class TaskProgressChart extends ChartWidget
                         $completedCount,
                     ],
                     'backgroundColor' => [
-                        'rgb(156, 163, 175)', // gray for pending
                         'rgb(251, 191, 36)',  // yellow for in progress
+                        'rgb(37, 99, 235)', // gray for pending
                         'rgb(34, 197, 94)',   // green for completed
                     ],
                     'borderColor' => [
-                        'rgb(107, 114, 128)',
                         'rgb(245, 158, 11)',
+                        'rgb(37, 99, 235)',
                         'rgb(22, 163, 74)',
                     ],
                     'borderWidth' => 1,
