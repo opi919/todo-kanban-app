@@ -12,6 +12,7 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class TaskResource extends Resource
 {
@@ -22,7 +23,11 @@ class TaskResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->forUser(auth()->user())->with(['assignedUsers', 'creator', 'organization']);
+        return parent::getEloquentQuery()->forUser(auth()->user())
+            ->withoutGlobalScopes([SoftDeletingScope::class])
+            ->where('status', '!=', TaskStatus::rejected)
+            ->where('status', '!=', TaskStatus::waiting)
+            ->with(['assignedUsers', 'creator', 'organization']);
     }
 
     public static function form(Form $form): Form
