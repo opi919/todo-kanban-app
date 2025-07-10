@@ -5,11 +5,13 @@ namespace App\Filament\Pages;
 use App\TaskStatus;
 use App\Models\Task;
 use App\Models\User;
+use Filament\Actions\CreateAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Builder;
 use Mokhosh\FilamentKanban\Pages\KanbanBoard;
 
@@ -23,7 +25,7 @@ class TasksKanbanBoard extends KanbanBoard
 
     protected function getEloquentQuery(): Builder
     {
-        return Task::query()->forUser(auth()->user());
+        return Task::query()->forUser(auth()->user())->with(['assignedUsers', 'creator', 'organization']);
     }
 
     public static function getNavigationBadge(): ?string
@@ -45,28 +47,52 @@ class TasksKanbanBoard extends KanbanBoard
         }
 
         return [
-            \Filament\Actions\Action::make('create')
-                ->label('Create Task')
-                ->icon('heroicon-o-plus')
-                ->color('primary')
+            CreateAction::make()
+                ->model(Task::class)
                 ->form($this->getCreateModalFormSchema())
-                ->action(function (array $data) {
+                ->mutateFormDataUsing(function (array $data): array {
                     $data['status'] = TaskStatus::Pending->value;
                     $data['created_by'] = auth()->id();
-                    Task::create($data);
-                    $this->notify('success', 'Task created successfully.');
+                    $data['organization_id'] = auth()->user()->organization_id;
+                    return $data;
+                })
+                ->after(function (Task $record, array $data) {
+                    if (isset($data['assignedUsers']) && is_array($data['assignedUsers'])) {
+                        $record->assignedUsers()->sync($data['assignedUsers']);
+                    }
+                    $this->dispatch('refresh');
                 }),
         ];
     }
 
-    protected function getCreateActionLabel(): string
+    protected function createRecord(array $data): void
     {
-        return 'Create Task';
+        $data['status'] = TaskStatus::Pending->value;
+        $data['created_by'] = auth()->id();
+        $data['organization_id'] = auth()->user()->organization_id;
+        
+        // Extract assigned users before creating task
+        $assignedUsers = $data['assignedUsers'] ?? [];
+        unset($data['assignedUsers']);
+        
+        $task = Task::create($data);
+        
+        // Attach assigned users
+        if (!empty($assignedUsers)) {
+            $task->assignedUsers()->sync($assignedUsers);
+        }
+        
+        Notification::make()
+            ->title('Task Created')
+            ->body("Task '{$task->title}' has been created successfully.")
+            ->success()
+            ->send();
     }
 
     protected function getEditModalFormSchema(string|int|null $recordId): array
     {
         $user = auth()->user();
+        $task = Task::find($recordId);
 
         if ($user->isAdmin()) {
             return [
@@ -89,10 +115,13 @@ class TasksKanbanBoard extends KanbanBoard
                     ])
                     ->required(),
 
-                Select::make('assigned_to')
+                Select::make('assignedUsers')
                     ->label('Assigned To')
-                    ->options(User::all()->pluck('name', 'id'))
-                    ->searchable(),
+                    ->options($user->getAssignableUsersQuery()->pluck('name', 'id'))
+                    ->multiple()
+                    ->searchable()
+                    ->preload()
+                    ->default($task ? $task->assignedUsers->pluck('id')->toArray() : []),
 
                 DatePicker::make('due_date'),
             ];
@@ -127,8 +156,9 @@ class TasksKanbanBoard extends KanbanBoard
 
     protected function getCreateModalFormSchema(): array
     {
-        // Only admins can create tasks
-        if (!auth()->user()->isAdmin()) {
+        $user = auth()->user();
+
+        if (!$user->isAdmin()) {
             return [];
         }
 
@@ -149,48 +179,81 @@ class TasksKanbanBoard extends KanbanBoard
                 ->default('medium')
                 ->required(),
 
-            Select::make('assigned_to')
+            Select::make('assignedUsers')
                 ->label('Assigned To')
-                ->options(User::all()->pluck('name', 'id'))
-                ->searchable(),
+                ->options($user->getAssignableUsersQuery()->pluck('name', 'id'))
+                ->multiple()
+                ->searchable()
+                ->preload(),
 
             DatePicker::make('due_date'),
 
             Hidden::make('created_by')
-                ->default(auth()->id()),
+                ->default($user->id),
+
+            Hidden::make('organization_id')
+                ->default($user->organization_id),
         ];
     }
 
-    // // Missing method: Handle status changes when dragging tasks
     public function onStatusChanged(string|int $recordId, string $status, array $fromOrderedIds, array $toOrderedIds): void
     {
         $task = Task::find($recordId);
+        
+        // Check if user can modify this task
+        if (!$task->canBeEditedBy(auth()->user())) {
+            Notification::make()
+                ->title('Access Denied')
+                ->body('You can only move tasks assigned to you or in your organization.')
+                ->danger()
+                ->send();
+            return;
+        }
 
         $task->update(['status' => $status]);
-
-        // Update sort order for all tasks in the destination column
         Task::setNewOrder($toOrderedIds);
+
+        Notification::make()
+            ->title('Task Updated')
+            ->body("Task '{$task->title}' moved to " . TaskStatus::from($status)->getLabel())
+            ->success()
+            ->send();
     }
 
-    // // Missing method: Handle sorting within the same column
     public function onSortChanged(string|int $recordId, string $status, array $orderedIds): void
     {
         $task = Task::find($recordId);
-
+        
+        // Check if user can modify this task
+        if (!$task->canBeEditedBy(auth()->user())) {
+            Notification::make()
+                ->title('Access Denied')
+                ->body('You can only reorder tasks assigned to you or in your organization.')
+                ->danger()
+                ->send();
+            return;
+        }
 
         Task::setNewOrder($orderedIds);
     }
 
-    // Missing method: Handle record editing
     protected function editRecord($recordId, array $data, array $state): void
     {
         $task = Task::find($recordId);
-
+        
         // Check if user can edit this task
-        if (!auth()->user()->isAdmin() && $task->assigned_to !== auth()->id()) {
-            $this->notify('danger', 'You can only edit tasks assigned to you.');
+        if (!$task->canBeEditedBy(auth()->user())) {
+            Notification::make()
+                ->title('Access Denied')
+                ->body('You can only edit tasks assigned to you or in your organization.')
+                ->danger()
+                ->send();
             return;
         }
+
+        // Extract assigned users before updating
+        $assignedUsers = $data['assignedUsers'] ?? null;
+        unset($data['assignedUsers']);
 
         // For regular users, only allow status updates
         if (!auth()->user()->isAdmin()) {
@@ -200,12 +263,20 @@ class TasksKanbanBoard extends KanbanBoard
         } else {
             // Admins can update all fields
             $task->update($data);
+            
+            // Update assigned users if provided
+            if ($assignedUsers !== null) {
+                $task->assignedUsers()->sync($assignedUsers);
+            }
         }
 
-        $this->notify('success', 'Task updated successfully.');
+        Notification::make()
+            ->title('Task Updated')
+            ->body("Task '{$task->title}' has been updated successfully.")
+            ->success()
+            ->send();
     }
 
-    // Optional: Customize the record title shown on cards
     protected function getRecordTitle(?object $record): string
     {
         return $record->title ?? 'Untitled Task';
@@ -215,8 +286,20 @@ class TasksKanbanBoard extends KanbanBoard
     {
         $subtitle = [];
 
-        if ($record->assignedUser) {
-            $subtitle[] = "👤 {$record->assignedUser->name}";
+        // Show assigned users
+        if ($record->assignedUsers && $record->assignedUsers->count() > 0) {
+            $userNames = $record->assignedUsers->pluck('name')->take(2)->join(', ');
+            if ($record->assignedUsers->count() > 2) {
+                $userNames .= ' +' . ($record->assignedUsers->count() - 2);
+            }
+            $subtitle[] = "👥 {$userNames}";
+        } else {
+            $subtitle[] = "👤 Unassigned";
+        }
+
+        // Show organization for super admin
+        if (auth()->user()->isSuperAdmin() && $record->organization) {
+            $subtitle[] = "🏢 {$record->organization->name}";
         }
 
         if ($record->due_date) {
@@ -226,7 +309,7 @@ class TasksKanbanBoard extends KanbanBoard
         }
 
         if ($record->priority && $record->priority !== 'medium') {
-            $priorityIcon = match ($record->priority) {
+            $priorityIcon = match($record->priority) {
                 'urgent' => '🔴',
                 'high' => '🟡',
                 'low' => '🟢',
@@ -254,19 +337,23 @@ class TasksKanbanBoard extends KanbanBoard
         };
     }
 
-    // Optional: Add custom CSS classes to cards
     protected function getCardExtraAttributes(?object $record): array
     {
         $classes = [];
-
+        
         // Add special styling for overdue tasks
         if ($record->due_date && $record->due_date->isPast() && $record->status !== TaskStatus::Completed) {
             $classes[] = 'border-red-300 bg-red-50';
         }
-
+        
         // Add special styling for high priority tasks
         if ($record->priority === 'urgent') {
             $classes[] = 'ring-2 ring-red-200';
+        }
+
+        // Add styling for unassigned tasks (admin view)
+        if (auth()->user()->isAdmin() && $record->assignedUsers->count() === 0) {
+            $classes[] = 'border-dashed border-gray-300';
         }
 
         return [
@@ -274,34 +361,18 @@ class TasksKanbanBoard extends KanbanBoard
         ];
     }
 
-    // Optional: Customize modal titles
-    protected function getEditModalTitle(): string
+    protected function canEdit(object $record): bool
     {
-        return 'Edit Task';
+        return $record->canBeEditedBy(auth()->user());
     }
 
-    protected function getCreateModalTitle(): string
+    protected function canDelete(object $record): bool
     {
-        return 'Create New Task';
+        return auth()->user()->isAdmin() && $record->canBeEditedBy(auth()->user());
     }
 
-    // Optional: Add confirmation for sensitive actions
-    protected function getDeleteAction(): array
+    protected function canCreate(): bool
     {
-        if (!auth()->user()->isAdmin()) {
-            return [];
-        }
-
-        return [
-            'delete' => [
-                'label' => 'Delete Task',
-                'icon' => 'heroicon-o-trash',
-                'color' => 'danger',
-                'requiresConfirmation' => true,
-                'modalHeading' => 'Delete Task',
-                'modalDescription' => 'Are you sure you want to delete this task? This action cannot be undone.',
-                'modalSubmitActionLabel' => 'Yes, delete it',
-            ],
-        ];
+        return auth()->user()->isAdmin();
     }
 }

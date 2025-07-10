@@ -3,7 +3,6 @@
 namespace App\Filament\Resources;
 
 use App\TaskStatus;
-use App\UserRole;
 use App\Filament\Resources\TaskResource\Pages;
 use App\Models\Task;
 use App\Models\User;
@@ -23,11 +22,13 @@ class TaskResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->forUser(auth()->user());
+        return parent::getEloquentQuery()->forUser(auth()->user())->with(['assignedUsers', 'creator', 'organization']);
     }
 
     public static function form(Form $form): Form
     {
+        $user = auth()->user();
+
         return $form
             ->schema([
                 Forms\Components\TextInput::make('title')
@@ -41,7 +42,7 @@ class TaskResource extends Resource
                     ->options(TaskStatus::class)
                     ->default(TaskStatus::Pending)
                     ->required()
-                    ->disabled(fn() => !auth()->user()->isAdmin()),
+                    ->disabled(fn() => !$user->isAdmin()),
 
                 Forms\Components\Select::make('priority')
                     ->options([
@@ -52,19 +53,27 @@ class TaskResource extends Resource
                     ])
                     ->default('medium')
                     ->required()
-                    ->disabled(fn() => !auth()->user()->isAdmin()),
+                    ->disabled(fn() => !$user->isAdmin()),
 
-                Forms\Components\Select::make('assigned_to')
+                Forms\Components\Select::make('assignedUsers')
                     ->label('Assigned To')
-                    ->options(User::all()->pluck('name', 'id'))
+                    ->relationship('assignedUsers', 'name')
+                    ->options(function () use ($user) {
+                        return $user->getAssignableUsersQuery()->pluck('name', 'id');
+                    })
+                    ->multiple()
                     ->searchable()
-                    ->visible(fn() => auth()->user()->isAdmin()),
+                    ->preload()
+                    ->visible(fn() => $user->isAdmin()),
 
                 Forms\Components\DatePicker::make('due_date')
-                    ->disabled(fn() => !auth()->user()->isAdmin()),
+                    ->disabled(fn() => !$user->isAdmin()),
 
                 Forms\Components\Hidden::make('created_by')
-                    ->default(auth()->id()),
+                    ->default($user->id),
+
+                Forms\Components\Hidden::make('organization_id')
+                    ->default($user->organization_id),
             ]);
     }
 
@@ -94,9 +103,20 @@ class TaskResource extends Resource
                         'danger' => 'urgent',
                     ]),
 
-                Tables\Columns\TextColumn::make('assignedUser.name')
+                Tables\Columns\TextColumn::make('assignedUsers.name')
                     ->label('Assigned To')
+                    ->badge()
+                    ->separator(',')
                     ->visible($user->isAdmin()),
+
+                Tables\Columns\TextColumn::make('assigned_users_names')
+                    ->label('Assigned To')
+                    ->visible(!$user->isAdmin())
+                    ->getStateUsing(fn(Task $record) => $record->assignedUsers->pluck('name')->join(', ')),
+
+                Tables\Columns\TextColumn::make('organization.name')
+                    ->label('Organization')
+                    ->visible($user->isSuperAdmin()),
 
                 Tables\Columns\TextColumn::make('creator.name')
                     ->label('Created By')
@@ -114,22 +134,36 @@ class TaskResource extends Resource
             ->filters([
                 Tables\Filters\SelectFilter::make('status')
                     ->options(TaskStatus::class),
-                Tables\Filters\SelectFilter::make('assigned_to')
+
+                Tables\Filters\SelectFilter::make('assignedUsers')
                     ->label('Assigned To')
-                    ->options(User::all()->pluck('name', 'id'))
+                    ->relationship('assignedUsers', 'name')
+                    ->options($user->getAssignableUsersQuery()->pluck('name', 'id'))
                     ->visible($user->isAdmin()),
+
+                Tables\Filters\SelectFilter::make('priority')
+                    ->options([
+                        'low' => 'Low',
+                        'medium' => 'Medium',
+                        'high' => 'High',
+                        'urgent' => 'Urgent',
+                    ]),
+
+                Tables\Filters\SelectFilter::make('organization')
+                    ->relationship('organization', 'name')
+                    ->visible($user->isSuperAdmin()),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make()
-                    ->visible(fn() => auth()->user()->isAdmin()),
+                    ->visible(fn(Task $record) => $record->canBeEditedBy(auth()->user())),
                 Tables\Actions\DeleteAction::make()
-                    ->visible(fn() => auth()->user()->isAdmin()),
+                    ->visible(fn() => $user->isAdmin()),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make()
-                        ->visible(fn() => auth()->user()->isAdmin()),
+                        ->visible(fn() => $user->isAdmin()),
                 ]),
             ]);
     }
@@ -137,6 +171,18 @@ class TaskResource extends Resource
     public static function canCreate(): bool
     {
         return auth()->user()?->isAdmin() ?? false;
+    }
+
+    public static function getNavigationBadge(): ?string
+    {
+        $user = auth()->user();
+        $count = Task::query()->forUser($user)->count();
+        return $count > 0 ? (string) $count : null;
+    }
+
+    public static function getNavigationBadgeColor(): string|array|null
+    {
+        return auth()->user()->isAdmin() ? 'warning' : 'primary';
     }
 
     public static function getPages(): array

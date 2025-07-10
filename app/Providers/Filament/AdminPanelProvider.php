@@ -2,6 +2,9 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Resources\OrganizationResource;
+use App\Filament\Widgets\OrganizationOverviewWidget;
+use App\Filament\Widgets\TaskAssignmentWidget;
 use App\Filament\Widgets\TaskProgressChart;
 use App\Filament\Widgets\TaskStatsWidget;
 use Filament\Http\Middleware\Authenticate;
@@ -55,6 +58,11 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
+            ])
+            ->navigationGroups([
+                'System Management',
+                'Task Management', 
+                'User Management',
             ]);
     }
 }
