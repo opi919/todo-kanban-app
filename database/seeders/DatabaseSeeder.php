@@ -98,7 +98,7 @@ class DatabaseSeeder extends Seeder
             [
                 'name' => 'Momen Khandoker Ope',
                 'email' => 'khandokermomen919@ru.ac.bd',
-                'password' => Hash::make('381699'),
+                'password' => Hash::make('opi919@'),
             ],
             [
                 'name' => 'Faizul Islam Faruq',
