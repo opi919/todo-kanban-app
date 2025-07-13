@@ -87,7 +87,8 @@ class TaskResource extends Resource
                     ->default($user->organization_id)
                     ->searchable()
                     ->preload()
-                    ->visible(fn() => $user->isSuperAdmin()),
+                    ->visible(fn() => $user->isSuperAdmin())
+                    ->required(fn() => $user->isSuperAdmin()),
 
                 Forms\Components\DatePicker::make('due_date'),
 
@@ -142,7 +143,7 @@ class TaskResource extends Resource
                     ->label('Comment')
                     ->searchable()
                     ->limit(50),
-                                        
+
                 Tables\Columns\TextColumn::make('organization.name')
                     ->label('Organization')
                     ->visible($user->isSuperAdmin()),
