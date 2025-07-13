@@ -76,21 +76,17 @@ class TaskResource extends Resource
                     ->preload()
                     ->required(),
 
-                Forms\Components\Select::make('organization_id')
+                $user->isSuperAdmin()
+                    ? Forms\Components\Select::make('organization_id')
                     ->label('Organization')
                     ->relationship('organization', 'name')
-                    ->options(
-                        $user->isSuperAdmin()
-                            ? \App\Models\Organization::query()
-                            ->pluck('name', 'id')
-                            : [$user->organization_id => $user->organization?->name]
-                    )
-                    ->default($user->organization_id)
+                    ->options(\App\Models\Organization::pluck('name', 'id'))
                     ->searchable()
                     ->preload()
-                    ->visible(fn() => $user->isSuperAdmin())
-                    ->required(fn() => $user->isSuperAdmin()),
-
+                    ->required()
+                    : Forms\Components\Hidden::make('organization_id')
+                    ->default($user->organization_id),
+                    
                 Forms\Components\DatePicker::make('due_date'),
 
                 Forms\Components\Hidden::make('created_by')
