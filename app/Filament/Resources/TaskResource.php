@@ -48,6 +48,7 @@ class TaskResource extends Resource
                     ->options(
                         $user->isAdmin() ? collect(TaskStatus::cases())
                             ->reject(fn($status) => $status === TaskStatus::waiting)
+                            ->reject(fn($status) => $status === TaskStatus::rejected)
                             ->mapWithKeys(fn($status) => [$status->value => $status->getLabel()])
                             ->toArray() : TaskStatus::class
                     )
