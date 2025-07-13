@@ -51,55 +51,6 @@ class TasksKanbanBoard extends KanbanBoard
         return 'primary';
     }
 
-    protected function getHeaderActions(): array
-    {
-        if (!auth()->user()->isAdmin()) {
-            return [];
-        }
-
-        return [
-            CreateAction::make()
-                ->model(Task::class)
-                ->form($this->getCreateModalFormSchema())
-                ->mutateFormDataUsing(function (array $data): array {
-                    $data['status'] = TaskStatus::Pending->value;
-                    $data['created_by'] = auth()->id();
-                    $data['organization_id'] = auth()->user()->organization_id;
-                    return $data;
-                })
-                ->after(function (Task $record, array $data) {
-                    if (isset($data['assignedUsers']) && is_array($data['assignedUsers'])) {
-                        $record->assignedUsers()->sync($data['assignedUsers']);
-                    }
-                    $this->dispatch('refresh');
-                }),
-        ];
-    }
-
-    protected function createRecord(array $data): void
-    {
-        $data['status'] = TaskStatus::Pending->value;
-        $data['created_by'] = auth()->id();
-        $data['organization_id'] = auth()->user()->organization_id;
-
-        // Extract assigned users before creating task
-        $assignedUsers = $data['assignedUsers'] ?? [];
-        unset($data['assignedUsers']);
-
-        $task = Task::create($data);
-
-        // Attach assigned users
-        if (!empty($assignedUsers)) {
-            $task->assignedUsers()->sync($assignedUsers);
-        }
-
-        Notification::make()
-            ->title('Task Created')
-            ->body("Task '{$task->title}' has been created successfully.")
-            ->success()
-            ->send();
-    }
-
     protected function getEditModalFormSchema(string|int|null $recordId): array
     {
         $user = auth()->user();
