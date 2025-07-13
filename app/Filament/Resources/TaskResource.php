@@ -73,6 +73,14 @@ class TaskResource extends Resource
                     ->searchable()
                     ->preload(),
 
+                Forms\Components\Select::make('organization_id')
+                    ->label('Organization')
+                    ->relationship('organization', 'name')
+                    ->options(User::query()->where('id', $user->id)->pluck('organization_id', 'name'))
+                    ->visible($user->isSuperAdmin())
+                    ->default($user->organization_id)
+                    ->required(),
+
                 Forms\Components\DatePicker::make('due_date'),
 
                 Forms\Components\Hidden::make('created_by')
