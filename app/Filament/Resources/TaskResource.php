@@ -72,7 +72,8 @@ class TaskResource extends Resource
                     })
                     ->multiple()
                     ->searchable()
-                    ->preload(),
+                    ->preload()
+                    ->required(),
 
                 Forms\Components\Select::make('organization_id')
                     ->label('Organization')
@@ -80,7 +81,7 @@ class TaskResource extends Resource
                     ->options(
                         $user->isSuperAdmin()
                             ? \App\Models\Organization::query()
-                                ->pluck('name', 'id')
+                            ->pluck('name', 'id')
                             : [$user->organization_id => $user->organization?->name]
                     )
                     ->default($user->organization_id)
@@ -92,6 +93,9 @@ class TaskResource extends Resource
 
                 Forms\Components\Hidden::make('created_by')
                     ->default($user->id),
+
+                Forms\Components\Textarea::make('comment')
+                    ->rows(2),
             ]);
     }
 
@@ -134,6 +138,11 @@ class TaskResource extends Resource
                     ->visible(!$user->isAdmin())
                     ->getStateUsing(fn(Task $record) => $record->assignedUsers->pluck('name')->join(', ')),
 
+                Tables\Columns\TextColumn::make('comment')
+                    ->label('Comment')
+                    ->searchable()
+                    ->limit(50),
+                                        
                 Tables\Columns\TextColumn::make('organization.name')
                     ->label('Organization')
                     ->visible($user->isSuperAdmin()),

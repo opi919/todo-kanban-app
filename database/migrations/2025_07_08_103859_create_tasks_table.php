@@ -19,6 +19,7 @@ return new class extends Migration
             $table->integer('sort_order')->nullable();
             $table->string('priority')->default('medium');
             $table->date('due_date')->nullable();
+            $table->text('comment')->nullable();
             $table->foreignId('assigned_to')->nullable()->constrained('users')->onDelete('set null');
             $table->foreignId('created_by')->constrained('users')->onDelete('cascade');
             $table->foreignId('organization_id')->nullable()->constrained()->onDelete('cascade');
