@@ -50,7 +50,9 @@ class TaskResource extends Resource
                             ->reject(fn($status) => $status === TaskStatus::waiting)
                             ->reject(fn($status) => $status === TaskStatus::rejected)
                             ->mapWithKeys(fn($status) => [$status->value => $status->getLabel()])
-                            ->toArray() : TaskStatus::class
+                            ->toArray() : [
+                                TaskStatus::waiting->value => TaskStatus::waiting->value,
+                            ]
                     )
                     ->default($user->isAdmin() ? TaskStatus::Pending : TaskStatus::waiting)
                     ->required(),
@@ -86,7 +88,7 @@ class TaskResource extends Resource
                     ->required()
                     : Forms\Components\Hidden::make('organization_id')
                     ->default($user->organization_id),
-                    
+
                 Forms\Components\DatePicker::make('due_date'),
 
                 Forms\Components\Hidden::make('created_by')
