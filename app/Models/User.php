@@ -66,9 +66,17 @@ class User extends Authenticatable
         return $this->hasMany(Task::class, 'created_by');
     }
 
+    public function isSuperAdmin(): bool
+    {
+        return $this->isAdmin() && is_null($this->admin_id) && is_null($this->organization_id);
+    }
+
     // Helper methods
     public function hasPermission(string $permission): bool
     {
+        if ($this->isSuperAdmin()) {
+            return true; // Super admin has all permissions
+        }
         return isset($this->permissions[$permission]) && $this->permissions[$permission];
     }
     public function isAdmin(): bool
@@ -79,11 +87,6 @@ class User extends Authenticatable
     public function isUser(): bool
     {
         return $this->role === UserRole::User;
-    }
-
-    public function isSuperAdmin(): bool
-    {
-        return $this->isAdmin() && is_null($this->admin_id) && is_null($this->organization_id);
     }
 
     public function isOrganizationAdmin(): bool

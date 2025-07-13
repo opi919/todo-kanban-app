@@ -6,6 +6,7 @@ use App\TaskStatus;
 use App\Filament\Resources\TaskResource\Pages;
 use App\Models\Task;
 use App\Models\User;
+use App\UserRole;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -76,18 +77,21 @@ class TaskResource extends Resource
                 Forms\Components\Select::make('organization_id')
                     ->label('Organization')
                     ->relationship('organization', 'name')
-                    ->options(User::query()->where('id', $user->id)->pluck('organization_id', 'name'))
-                    ->visible($user->isSuperAdmin())
+                    ->options(
+                        $user->isSuperAdmin()
+                            ? \App\Models\Organization::query()
+                                ->pluck('name', 'id')
+                            : [$user->organization_id => $user->organization?->name]
+                    )
                     ->default($user->organization_id)
-                    ->required(),
+                    ->searchable()
+                    ->preload()
+                    ->visible(fn() => $user->isSuperAdmin()),
 
                 Forms\Components\DatePicker::make('due_date'),
 
                 Forms\Components\Hidden::make('created_by')
                     ->default($user->id),
-
-                Forms\Components\Hidden::make('organization_id')
-                    ->default($user->organization_id),
             ]);
     }
 
