@@ -12,6 +12,9 @@ class ListTasks extends ListRecords
 
     protected function getHeaderActions(): array
     {
+        if (!auth()->user()?->isAdmin()) {
+            return [];
+        }
         return [
             Actions\CreateAction::make(),
         ];
